@@ -44,11 +44,14 @@ const transporter = nodemailer.createTransport({
 });
 
 // DATABASE CONNECTION POOL
+// DATABASE CONNECTION POOL (Cloud Ready)
 const db = mysql.createPool({
     host: process.env.DB_HOST || 'localhost', 
     user: process.env.DB_USER || 'root', 
     password: process.env.DB_PASS || '', 
     database: process.env.DB_NAME || 'thrift_store_db',
+    port: process.env.DB_PORT || 3306, // 👈 Added Port
+    ssl: { rejectUnauthorized: false }, // 👈 Added SSL (Required for Aiven)
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
