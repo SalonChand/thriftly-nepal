@@ -23,12 +23,12 @@ const Home = () => {
     const categories = ["All", "Men", "Women", "Kids", "Toys", "Beauty", "Home", "Art", "Sports", "Electronics", "Accessories"];
 
     useEffect(() => {
-        axios.get('http://localhost:5000/products')
+        axios.get('https://thriftly-nepal.onrender.com/products')
             .then(res => setProducts(res.data))
             .catch(err => console.log(err));
 
         if (user) {
-            axios.get(`http://localhost:5000/wishlist/${user.id}`).then(res => { 
+            axios.get(`https://thriftly-nepal.onrender.com/wishlist/${user.id}`).then(res => { 
                 if(Array.isArray(res.data)) setWishlistIds(res.data.map(item => item.id)); 
             });
         }
@@ -40,7 +40,7 @@ const Home = () => {
             toast.error("Please Login to save items");
             return;
         }
-        axios.post('http://localhost:5000/wishlist/toggle', { user_id: user.id, product_id: productId }, { withCredentials: true })
+        axios.post('https://thriftly-nepal.onrender.com/wishlist/toggle', { user_id: user.id, product_id: productId }, { withCredentials: true })
             .then(res => { 
                 if(res.data.Status === "Added") {
                     setWishlistIds([...wishlistIds, productId]);

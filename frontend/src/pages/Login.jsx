@@ -1,3 +1,4 @@
+
 import React, { useState, useContext } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
@@ -14,7 +15,7 @@ const Login = () => {
 
     const handleLogin = (e) => {
         e.preventDefault();
-        axios.post('http://localhost:5000/login', { email, password }, { withCredentials: true })
+        axios.post('https://thriftly-nepal.onrender.com/login', { email, password }, { withCredentials: true })
             .then(res => {
                 if(res.data.Status === "Success") {
                     login(res.data); // Save user to Context

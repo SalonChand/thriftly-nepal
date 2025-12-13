@@ -57,7 +57,7 @@ const Sell = () => {
 
         const loadingToast = toast.loading("Uploading...");
 
-        axios.post('http://localhost:5000/products', formData, { withCredentials: true })
+        axios.post('https://thriftly-nepal.onrender.com/products', formData, { withCredentials: true })
             .then(res => {
                 toast.dismiss(loadingToast);
                 if(res.data.Status === "Success") {

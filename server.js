@@ -17,8 +17,11 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.JWT_SECRET || "supersecretkey"; 
 
-app.use(cors({ origin: ["http://localhost:5173", "http://localhost:4173"], methods: ["POST", "GET", "PUT", "DELETE"], credentials: true }));
-app.use(express.json());
+app.use(cors({ 
+    origin: "*", 
+    methods: ["POST", "GET", "PUT", "DELETE"], 
+    credentials: true 
+}));app.use(express.json());
 app.use(cookieParser());
 
 // CLOUDINARY CONFIG
