@@ -15,7 +15,11 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.JWT_SECRET || "supersecretkey"; 
 
-app.use(cors({ origin: ["http://localhost:5173"], methods: ["POST", "GET", "PUT", "DELETE"], credentials: true }));
+app.use(cors({ 
+    origin: ["http://localhost:5173", "http://localhost:4173"], // ⚠️ ADDED 4173 HERE
+    methods: ["POST", "GET", "PUT", "DELETE"], 
+    credentials: true 
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
