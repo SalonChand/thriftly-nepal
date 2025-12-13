@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Default Background Color */
+body {
+  background-color: #c996f3; /* Light Grey/White */
+  color: #1c1917; /* Dark Stone text */
+}

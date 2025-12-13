@@ -1,0 +1,157 @@
+import React, { useEffect, useState, useContext } from 'react';
+import axios from 'axios';
+import { AuthContext } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
+import { Search, Heart, ArrowUpDown } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const Home = () => {
+    const { user } = useContext(AuthContext);
+    const [products, setProducts] = useState([]);
+    const [wishlistIds, setWishlistIds] = useState([]);
+    const [searchTerm, setSearchTerm] = useState("");
+    
+    // Filters
+    const [selectedCategory, setSelectedCategory] = useState("All");
+    const [selectedSize, setSelectedSize] = useState("All");
+    const [selectedCondition, setSelectedCondition] = useState("All");
+    
+    // 🆕 SORT STATE
+    const [sortOption, setSortOption] = useState("Newest");
+
+    // Categories
+    const categories = ["All", "Men", "Women", "Kids", "Toys", "Beauty", "Home", "Sports", "Electronics", "Accessories"];
+
+    useEffect(() => {
+        axios.get('http://localhost:5000/products').then(res => setProducts(res.data)).catch(err => console.log(err));
+        if (user) {
+            axios.get(`http://localhost:5000/wishlist/${user.id}`).then(res => { if(Array.isArray(res.data)) setWishlistIds(res.data.map(item => item.id)); });
+        }
+    }, [user]);
+
+    const toggleWishlist = (e, productId) => {
+        e.preventDefault();
+        if(!user) {
+            toast.error("Please Login to save items");
+            return;
+        }
+        axios.post('http://localhost:5000/wishlist/toggle', { user_id: user.id, product_id: productId }, { withCredentials: true })
+            .then(res => { 
+                if(res.data.Status === "Added") {
+                    setWishlistIds([...wishlistIds, productId]);
+                    toast.success("Added to Wishlist");
+                } else {
+                    setWishlistIds(wishlistIds.filter(id => id !== productId));
+                    toast.success("Removed from Wishlist");
+                }
+            });
+    };
+
+    // 🆕 FILTER + SORT LOGIC
+    const filteredProducts = products
+        .filter((item) => {
+            const title = (item.title || "").toLowerCase();
+            const category = (item.category || "").toLowerCase();
+            const search = searchTerm.toLowerCase();
+            
+            const matchCategory = selectedCategory === "All" || category === selectedCategory.toLowerCase();
+            const matchCategoryLoose = selectedCategory === "Home" ? category.includes("home") : matchCategory;
+            const matchSize = selectedSize === "All" || (item.size && item.size === selectedSize);
+            const matchCondition = selectedCondition === "All" || (item.item_condition && item.item_condition === selectedCondition);
+            
+            return (title.includes(search) || category.includes(search)) && matchCategoryLoose && matchSize && matchCondition;
+        })
+        .sort((a, b) => {
+            if (sortOption === "PriceLow") return a.price - b.price; // Low to High
+            if (sortOption === "PriceHigh") return b.price - a.price; // High to Low
+            return b.id - a.id; // Newest (Higher ID = Newer)
+        });
+
+    return (
+        <div className="min-h-screen bg-[#FAFAFA] font-sans">
+            
+            {/* HERO SECTION */}
+            <div className="bg-stone-900 text-white pt-12 pb-24 px-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-full opacity-20 bg-[url('https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center"></div>
+                <div className="max-w-4xl mx-auto text-center relative z-10 mt-10">
+                    <span className="text-orange-500 font-bold tracking-widest text-xs uppercase mb-2 block">Nepal's #1 Thrift Store</span>
+                    <h1 className="text-4xl md:text-7xl font-serif font-bold mb-6 leading-tight">Wear the Story. <br/>Love the Price.</h1>
+                    
+                    <div className="max-w-lg mx-auto relative group mt-8">
+                        <input type="text" placeholder="Search for brands, toys, makeup..." className="w-full pl-12 pr-4 py-4 rounded-full text-stone-900 border-none outline-none shadow-2xl focus:ring-4 focus:ring-orange-500/50 transition" onChange={(e) => setSearchTerm(e.target.value)}/>
+                        <Search className="absolute left-5 top-4 text-stone-400" size={20} />
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-7xl mx-auto px-4 -mt-10 relative z-20 pb-20">
+                
+                {/* 🛠️ FILTER & SORT BAR */}
+                <div className="bg-white p-6 rounded-2xl shadow-lg border border-stone-100 mb-8 sticky top-24 z-30 flex flex-col gap-4">
+                    
+                    {/* Categories */}
+                    <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                        {categories.map(cat => (
+                            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-5 py-2 rounded-full font-bold text-sm border transition ${selectedCategory === cat ? 'bg-stone-900 text-white border-stone-900' : 'bg-stone-50 text-stone-600 border-stone-100 hover:border-stone-300'}`}>{cat}</button>
+                        ))}
+                    </div>
+
+                    <div className="border-t border-stone-100 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                        
+                        {/* Filters Left Side */}
+                        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                            <select onChange={(e) => setSelectedSize(e.target.value)} className="w-full md:w-auto px-4 py-2 rounded-full border border-stone-200 bg-white text-stone-700 text-sm font-bold outline-none cursor-pointer hover:border-stone-400"><option value="All">Size: All</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option></select>
+                            <select onChange={(e) => setSelectedCondition(e.target.value)} className="w-full md:w-auto px-4 py-2 rounded-full border border-stone-200 bg-white text-stone-700 text-sm font-bold outline-none cursor-pointer hover:border-stone-400"><option value="All">Condition: All</option><option value="Brand New">Brand New</option><option value="Like New">Like New</option><option value="Good">Good</option></select>
+                        </div>
+
+                        {/* 🆕 SORT DROPDOWN Right Side */}
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                            <ArrowUpDown size={16} className="text-stone-400" />
+                            <select onChange={(e) => setSortOption(e.target.value)} className="w-full md:w-auto px-4 py-2 rounded-full border border-stone-200 bg-stone-50 text-stone-900 text-sm font-bold outline-none cursor-pointer hover:border-orange-500 transition">
+                                <option value="Newest">Newest First</option>
+                                <option value="PriceLow">Price: Low to High</option>
+                                <option value="PriceHigh">Price: High to Low</option>
+                            </select>
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* PRODUCT GRID */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {filteredProducts.map((item) => (
+                        <Link to={`/product/${item.id}`} key={item.id} className="group relative flex flex-col bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 h-full">
+                            <div className="aspect-[3/4] w-full bg-stone-100 relative overflow-hidden">
+                                <img src={`http://localhost:5000/uploads/${item.image_url}`} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-700" />
+                                <button onClick={(e) => toggleWishlist(e, item.id)} className="absolute top-3 right-3 bg-white/90 p-2 rounded-full shadow-sm hover:scale-110 transition z-10">
+                                    <Heart size={18} className={wishlistIds.includes(item.id) ? "fill-red-500 text-red-500" : "text-stone-400"} />
+                                </button>
+                                <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded">
+                                    {item.size || "Free"}
+                                </div>
+                            </div>
+                            <div className="p-4 flex flex-col flex-grow">
+                                <div className="mb-2">
+                                    <h3 className="font-bold text-stone-900 truncate text-sm md:text-base">{item.title}</h3>
+                                </div>
+                                <div className="mt-auto flex justify-between items-center">
+                                    <span className="font-bold text-orange-600 text-lg">Rs. {item.price}</span>
+                                    <span className="text-[10px] uppercase font-bold text-stone-400 bg-stone-50 px-2 py-1 rounded">{item.item_condition || "Good"}</span>
+                                </div>
+                            </div>
+                        </Link>
+                    ))}
+                </div>
+                
+                {filteredProducts.length === 0 && (
+                    <div className="text-center text-stone-400 py-24">
+                        <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-4"><Search size={24} className="opacity-20"/></div>
+                        <p className="font-medium">No items found matching your filters.</p>
+                        <button onClick={() => {setSelectedCategory("All"); setSelectedSize("All"); setSelectedCondition("All"); setSearchTerm("")}} className="mt-4 text-orange-600 font-bold hover:underline">Clear all filters</button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+export default Home;
