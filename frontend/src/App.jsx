@@ -1,10 +1,13 @@
 import React, { useContext, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast'; 
+import { getImageUrl } from './utils';
+
+// 👇 1. IMPORT YOUR LOGO IMAGE
+import logoImg from './logo.png'; 
 
 // Import Pages
 import Home from './pages/Home';
-import logoImg from './logo.png';
 import Sell from './pages/Sell';
 import Register from './pages/Register';
 import Login from './pages/Login';
@@ -17,7 +20,7 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 
 import { AuthProvider, AuthContext } from './context/AuthContext';
-import { LogOut, User, Menu, X } from 'lucide-react';
+import { LogOut, User, Menu, X } from 'lucide-react'; // Removed ShoppingBag
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
@@ -27,15 +30,21 @@ const Navbar = () => {
     <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b border-stone-100 transition-all duration-300">
       <div className="container mx-auto px-6 h-20 flex justify-between items-center">
         
-        {/* 1. LOGO */}
+        {/* LOGO SECTION */}
         <Link to="/" className="flex items-center gap-2 group">
-            <img src={logoImg} alt="ThriftLy Logo" className="h-10 w-auto..." />
-            <span className="text-3xl font-serif font-bold text-stone-900 tracking-tight">
+            {/* 👇 2. USE THE IMAGE HERE */}
+            <img 
+                src={logoImg} 
+                alt="ThriftLy" 
+                className="h-10 w-auto object-contain" // Adjust h-10 to h-12 or h-8 to resize
+            />
+            {/* Optional: Keep text next to logo, or remove this span if you just want the image */}
+            <span className="text-3xl font-serif font-bold text-stone-900 tracking-tighter">
               Thrift<span className="text-orange-600">Ly.</span>
             </span>
         </Link>
 
-        {/* 2. CENTER MENU */}
+        {/* CENTER MENU */}
         <div className="hidden md:flex items-center gap-8">
             <Link to="/" className="text-stone-500 hover:text-stone-900 font-medium transition">Shop</Link>
             <Link to="/sell" className="text-stone-500 hover:text-stone-900 font-medium transition">Sell Items</Link>
@@ -43,7 +52,7 @@ const Navbar = () => {
             <Link to="/contact" className="text-stone-500 hover:text-stone-900 font-medium transition">Contact</Link>
         </div>
 
-        {/* 3. RIGHT ACTIONS */}
+        {/* RIGHT ACTIONS */}
         <div className="hidden md:flex items-center gap-4">
             {user ? (
                 <>
@@ -52,7 +61,7 @@ const Navbar = () => {
                     )}
                     <Link to="/profile" className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center overflow-hidden border border-orange-200 hover:bg-orange-200 transition">
                         {user.profile_pic ? (
-                        <img src={`http://localhost:5000/uploads/${user.profile_pic}`} className="w-full h-full object-cover" />
+                        <img src={getImageUrl(user.profile_pic)} className="w-full h-full object-cover" />
                         ) : (
                         <span className="text-orange-600 font-bold">{user.username ? user.username[0].toUpperCase() : <User size={18}/>}</span>
                         )}
@@ -64,13 +73,13 @@ const Navbar = () => {
             )}
         </div>
 
-        {/* 4. MOBILE MENU BUTTON */}
+        {/* MOBILE MENU BUTTON */}
         <button className="md:hidden text-stone-900" onClick={() => setIsOpen(!isOpen)}>
             {isOpen ? <X size={28} /> : <Menu size={28} />}
         </button>
       </div>
 
-      {/* 5. MOBILE MENU DROPDOWN */}
+      {/* MOBILE MENU DROPDOWN */}
       {isOpen && (
         <div className="md:hidden bg-white border-t border-stone-100 p-6 flex flex-col gap-4 shadow-xl">
             <Link to="/" className="text-lg font-bold text-stone-700" onClick={() => setIsOpen(false)}>Shop</Link>
