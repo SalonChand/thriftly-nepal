@@ -19,13 +19,26 @@ const SECRET_KEY = process.env.JWT_SECRET || "supersecretkey";
 
 // 1. FIX CORS FOR DEPLOYMENT
 // We list ALL possible URLs your frontend might come from
+// ALLOW ANY VERCEL APP TO CONNECT
 app.use(cors({ 
-    origin: [
-        "http://localhost:5173", 
-        "http://localhost:4173",
-        "https://thriftly-nepal.vercel.app",
-        "https://thriftly-nepal-pivy.vercel.app" // 👈 Added your specific Vercel link
-    ], 
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        // 1. Allow Localhost (for testing)
+        // 2. Allow ANY Vercel Deployment (ends with .vercel.app)
+        // 3. Allow Render (Self)
+        if (
+            origin.includes("localhost") || 
+            origin.includes(".vercel.app") || 
+            origin.includes("onrender.com")
+        ) {
+            return callback(null, true);
+        } else {
+            console.log("Blocked by CORS:", origin); // Debugging log
+            return callback(new Error('Not allowed by CORS'));
+        }
+    },
     methods: ["POST", "GET", "PUT", "DELETE"], 
     credentials: true 
 }));
