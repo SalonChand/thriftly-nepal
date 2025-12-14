@@ -18,12 +18,13 @@ const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.JWT_SECRET || "supersecretkey"; 
 
 // 1. FIX CORS FOR DEPLOYMENT
-// We must list the specific URLs (Localhost + Your Vercel Link)
+// We list ALL possible URLs your frontend might come from
 app.use(cors({ 
     origin: [
         "http://localhost:5173", 
         "http://localhost:4173",
-        "https://thriftly-nepal.vercel.app" // ⚠️ Check your Vercel URL later!
+        "https://thriftly-nepal.vercel.app",
+        "https://thriftly-nepal-pivy.vercel.app" // 👈 Added your specific Vercel link
     ], 
     methods: ["POST", "GET", "PUT", "DELETE"], 
     credentials: true 
@@ -54,7 +55,7 @@ const transporter = nodemailer.createTransport({
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
 });
 
-// DATABASE CONNECTION POOL
+// DATABASE CONNECTION POOL (Cloud Ready)
 const db = mysql.createPool({
     host: process.env.DB_HOST || 'localhost', 
     user: process.env.DB_USER || 'root', 
@@ -130,7 +131,7 @@ app.post('/login', (req, res) => {
                     // 2. FIX COOKIES FOR DEPLOYMENT (Vercel -> Render)
                     res.cookie('token', token, { 
                         httpOnly: true, 
-                        sameSite: 'none', 
+                        sameSite: 'none', // Critical for Cross-Site logic
                         secure: true // Essential for HTTPS
                     });
                     
