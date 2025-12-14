@@ -17,11 +17,19 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.JWT_SECRET || "supersecretkey"; 
 
+// 1. FIX CORS FOR DEPLOYMENT
+// We must list the specific URLs (Localhost + Your Vercel Link)
 app.use(cors({ 
-    origin: "*", 
+    origin: [
+        "http://localhost:5173", 
+        "http://localhost:4173",
+        "https://thriftly-nepal.vercel.app" // ⚠️ Check your Vercel URL later!
+    ], 
     methods: ["POST", "GET", "PUT", "DELETE"], 
     credentials: true 
-}));app.use(express.json());
+}));
+
+app.use(express.json());
 app.use(cookieParser());
 
 // CLOUDINARY CONFIG
@@ -47,14 +55,13 @@ const transporter = nodemailer.createTransport({
 });
 
 // DATABASE CONNECTION POOL
-// DATABASE CONNECTION POOL (Cloud Ready)
 const db = mysql.createPool({
     host: process.env.DB_HOST || 'localhost', 
     user: process.env.DB_USER || 'root', 
     password: process.env.DB_PASS || '', 
     database: process.env.DB_NAME || 'thrift_store_db',
-    port: process.env.DB_PORT || 3306, // 👈 Added Port
-    ssl: { rejectUnauthorized: false }, // 👈 Added SSL (Required for Aiven)
+    port: process.env.DB_PORT || 3306,
+    ssl: { rejectUnauthorized: false }, 
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
@@ -90,10 +97,7 @@ app.post('/register', (req, res) => {
         
         db.query(sql, [[username, email, hash, phone, otp, 0]], (err2) => {
             if (err2) return res.json({ Error: "User exists" });
-            
-            transporter.sendMail({ from: 'ThriftLy', to: email, subject: 'Verify Code', text: `Your OTP: ${otp}` })
-                .catch(e => console.log("Email failed"));
-                
+            transporter.sendMail({ from: 'ThriftLy', to: email, subject: 'Verify Code', text: `Your OTP: ${otp}` }).catch(e => console.log(e));
             return res.json({ Status: "Success" });
         });
     });
@@ -122,7 +126,14 @@ app.post('/login', (req, res) => {
                 if (response) {
                     const { id, username, role, profile_pic, bio } = data[0];
                     const token = jwt.sign({ username, id, role }, SECRET_KEY, { expiresIn: '1d' });
-                    res.cookie('token', token);
+                    
+                    // 2. FIX COOKIES FOR DEPLOYMENT (Vercel -> Render)
+                    res.cookie('token', token, { 
+                        httpOnly: true, 
+                        sameSite: 'none', 
+                        secure: true // Essential for HTTPS
+                    });
+                    
                     return res.json({ Status: "Success", user: { id, username, role, profile_pic, bio }, token });
                 } else {
                     return res.json({ Error: "Wrong Password" });
@@ -135,12 +146,8 @@ app.post('/login', (req, res) => {
 });
 
 // --- PRODUCT ROUTES ---
-
-// 1. Upload Product (Multi-Image)
 app.post('/products', verifyUser, upload.array('images', 5), (req, res) => {
     const { title, description, price, category, size, condition } = req.body;
-    
-    // Safety check for files
     const mainImage = (req.files && req.files.length > 0) ? req.files[0].path : null;
 
     const sql = "INSERT INTO products (`title`, `description`, `price`, `category`, `image_url`, `seller_id`, `size`, `item_condition`) VALUES (?)";
@@ -150,8 +157,6 @@ app.post('/products', verifyUser, upload.array('images', 5), (req, res) => {
         if (err) { console.log(err); return res.json({ Error: "Upload Error" }); }
         
         const productId = result.insertId;
-        
-        // Save extra images if they exist
         if (req.files && req.files.length > 0) {
             const imageValues = req.files.map(file => [productId, file.path]);
             db.query("INSERT INTO product_images (product_id, image_url) VALUES ?", [imageValues], (err2) => {
@@ -162,7 +167,6 @@ app.post('/products', verifyUser, upload.array('images', 5), (req, res) => {
     });
 });
 
-// 2. Get All Products (Customer)
 app.get('/products', (req, res) => {
     db.query("SELECT * FROM products WHERE is_sold = 0 ORDER BY created_at DESC", (err, data) => {
         if (err) return res.json([]);
@@ -170,7 +174,6 @@ app.get('/products', (req, res) => {
     });
 });
 
-// 3. Get All Products (Admin)
 app.get('/all-products', (req, res) => {
     db.query("SELECT * FROM products ORDER BY created_at DESC", (err, data) => {
         if (err) return res.json([]);
@@ -178,17 +181,14 @@ app.get('/all-products', (req, res) => {
     });
 });
 
-// 4. Get Single Product (With Gallery)
 app.get('/products/:id', (req, res) => {
     const sql = "SELECT products.*, users.phone as seller_phone, users.username as seller_name FROM products JOIN users ON products.seller_id = users.id WHERE products.id = ?";
-    
     db.query(sql, [req.params.id], (err, productData) => {
         if (err || productData.length === 0) return res.json({});
         const product = productData[0];
         
         db.query("SELECT image_url FROM product_images WHERE product_id = ?", [req.params.id], (err2, imageData) => {
             const images = imageData ? imageData.map(img => img.image_url) : [];
-            // Ensure main image is in the list
             if (product.image_url && !images.includes(product.image_url)) {
                 images.unshift(product.image_url);
             }
@@ -198,23 +198,19 @@ app.get('/products/:id', (req, res) => {
     });
 });
 
-// --- BUY & ORDERS ---
 app.post('/buy/:id', verifyUser, (req, res) => {
     const { seller_id } = req.body;
     db.query("UPDATE products SET is_sold = 1 WHERE id = ?", [req.params.id], (err) => {
         if (err) return res.json({ Error: "Update Failed" });
-        
         db.query("INSERT INTO orders (`product_id`, `buyer_id`, `seller_id`) VALUES (?)", [[req.params.id, req.user_id, seller_id]], () => {
             return res.json({ Status: "Success" });
         });
     });
 });
 
-// --- REVIEWS ---
 app.post('/reviews', verifyUser, (req, res) => {
     const { seller_id, rating, comment } = req.body;
     if (Number(seller_id) === Number(req.user_id)) return res.json({ Error: "Self-review blocked" });
-    
     db.query("INSERT INTO reviews (`reviewer_id`, `seller_id`, `rating`, `comment`) VALUES (?)", [[req.user_id, seller_id, rating, comment]], (err) => {
         if (err) return res.json({ Error: "DB Error" });
         return res.json({ Status: "Success" });
@@ -228,7 +224,6 @@ app.get('/reviews/:seller_id', (req, res) => {
     });
 });
 
-// --- ADMIN ---
 app.get('/users', (req, res) => {
     db.query("SELECT id, username, email, role, is_verified FROM users", (err, data) => res.json(data));
 });
@@ -250,7 +245,6 @@ app.delete('/products/:id', (req, res) => {
     });
 });
 
-// --- PROFILE ---
 app.get('/my-listings/:id', (req, res) => {
     db.query("SELECT * FROM products WHERE seller_id = ?", [req.params.id], (err, data) => res.json(data));
 });
@@ -268,29 +262,16 @@ app.get('/my-sales/:id', (req, res) => {
 app.put('/user/:id', upload.single('profile_pic'), (req, res) => {
     let sql = "UPDATE users SET username = ?, bio = ?";
     let params = [req.body.username, req.body.bio];
-    
-    // Check if new file uploaded
-    if (req.file) { 
-        sql += ", profile_pic = ?"; 
-        params.push(req.file.path); // Save Cloudinary URL
-    } 
-    
-    sql += " WHERE id = ?"; 
-    params.push(req.params.id);
-    
-    // 1. Run Update
+    if (req.file) { sql += ", profile_pic = ?"; params.push(req.file.path); }
+    sql += " WHERE id = ?"; params.push(req.params.id);
     db.query(sql, params, (err) => {
-        if (err) return res.json({Error: "Update Failed"});
-        
-        // 2. ⚠️ CRITICAL FIX: Fetch the UPDATED user data and send it back
+        if(err) return res.json({Error: "Update Failed"});
         db.query("SELECT id, username, email, bio, profile_pic, role FROM users WHERE id = ?", [req.params.id], (err2, data) => {
-            if(err2) return res.json({Error: "Fetch Error"});
-            return res.json({ Status: "Success", user: data[0] }); // Send updated user
+            return res.json({ Status: "Success", user: data[0] });
         });
     });
 });
 
-// --- WISHLIST ---
 app.post('/wishlist/toggle', verifyUser, (req, res) => {
     const { product_id } = req.body;
     db.query("SELECT * FROM wishlist WHERE user_id = ? AND product_id = ?", [req.user_id, product_id], (err, data) => {
@@ -306,7 +287,6 @@ app.get('/wishlist/:userId', (req, res) => {
     db.query("SELECT products.*, wishlist.id as wishlist_id FROM wishlist JOIN products ON wishlist.product_id = products.id WHERE wishlist.user_id = ?", [req.params.userId], (err, data) => res.json(data));
 });
 
-// --- EXTRAS ---
 app.post('/contact', (req, res) => {
     transporter.sendMail({ from: 'ThriftLy', to: process.env.EMAIL_USER, subject: `Support: ${req.body.name}`, text: req.body.message })
         .catch(e => console.log(e));
@@ -332,5 +312,4 @@ app.post('/reset-password', (req, res) => {
     });
 });
 
-// --- START SERVER ---
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
