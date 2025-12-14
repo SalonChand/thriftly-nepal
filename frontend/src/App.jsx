@@ -3,9 +3,6 @@ import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast'; 
 import { getImageUrl } from './utils';
 
-// 👇 1. IMPORT YOUR LOGO IMAGE
-import logoImg from './logo.png'; 
-
 // Import Pages
 import Home from './pages/Home';
 import Sell from './pages/Sell';
@@ -20,7 +17,8 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 
 import { AuthProvider, AuthContext } from './context/AuthContext';
-import { LogOut, User, Menu, X } from 'lucide-react'; // Removed ShoppingBag
+// 1. Re-added ShoppingBag here 👇
+import { LogOut, User, Menu, X, ShoppingBag } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
@@ -30,15 +28,12 @@ const Navbar = () => {
     <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b border-stone-100 transition-all duration-300">
       <div className="container mx-auto px-6 h-20 flex justify-between items-center">
         
-        {/* LOGO SECTION */}
+        {/* LOGO */}
         <Link to="/" className="flex items-center gap-2 group">
-            {/* 👇 2. USE THE IMAGE HERE */}
-            <img 
-                src={logoImg} 
-                alt="ThriftLy" 
-                className="h-10 w-auto object-contain" // Adjust h-10 to h-12 or h-8 to resize
-            />
-            {/* Optional: Keep text next to logo, or remove this span if you just want the image */}
+            {/* 2. Using Icon instead of broken Image */}
+            <div className="bg-orange-600 p-1.5 rounded-lg text-white transform group-hover:rotate-12 transition">
+                <ShoppingBag size={24} strokeWidth={2.5} />
+            </div>
             <span className="text-3xl font-serif font-bold text-stone-900 tracking-tighter">
               Thrift<span className="text-orange-600">Ly.</span>
             </span>
