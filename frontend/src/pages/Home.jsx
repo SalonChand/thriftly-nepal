@@ -22,13 +22,18 @@ const Home = () => {
 
     const categories = ["All", "Men", "Women", "Kids", "Toys", "Beauty", "Home", "Art", "Sports", "Electronics", "Accessories"];
 
+    // 🔗 API URL (Easier to change here)
+    const API_URL = "https://thriftly-nepal.onrender.com";
+
     useEffect(() => {
-        axios.get('http://localhost:5000/products')
+        // Fetch products from Cloud
+        axios.get(`${API_URL}/products`)
             .then(res => setProducts(res.data))
             .catch(err => console.log(err));
 
         if (user) {
-            axios.get(`http://localhost:5000/wishlist/${user.id}`).then(res => { 
+            // Fetch wishlist from Cloud
+            axios.get(`${API_URL}/wishlist/${user.id}`).then(res => { 
                 if(Array.isArray(res.data)) setWishlistIds(res.data.map(item => item.id)); 
             });
         }
@@ -40,7 +45,8 @@ const Home = () => {
             toast.error("Please Login to save items");
             return;
         }
-        axios.post('http://localhost:5000/wishlist/toggle', { user_id: user.id, product_id: productId }, { withCredentials: true })
+        // Send wishlist action to Cloud
+        axios.post(`${API_URL}/wishlist/toggle`, { user_id: user.id, product_id: productId }, { withCredentials: true })
             .then(res => { 
                 if(res.data.Status === "Added") {
                     setWishlistIds([...wishlistIds, productId]);
@@ -107,7 +113,7 @@ const Home = () => {
                     {filteredProducts.map((item) => (
                         <Link to={`/product/${item.id}`} key={item.id} className="group relative flex flex-col bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 h-full">
                             
-                            {/* 🆕 FIXED IMAGE HEIGHT: Aspect Ratio is Square (1:1) */}
+                            {/* FIXED IMAGE HEIGHT */}
                             <div className="aspect-square w-full bg-stone-100 relative overflow-hidden">
                                 <img src={getImageUrl(item.image_url)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-700" />
                                 
