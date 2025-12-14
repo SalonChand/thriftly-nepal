@@ -30,7 +30,7 @@ const Navbar = () => {
     <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b border-stone-100 transition-all duration-300">
       <div className="container mx-auto px-6 h-20 flex justify-between items-center">
         
-        {/* LOGO (Vector Icon - Safe!) */}
+        {/* LOGO (Vector Icon - Safe & Professional) */}
         <Link to="/" className="flex items-center gap-2 group">
             <div className="bg-orange-600 p-1.5 rounded-lg text-white transform group-hover:rotate-12 transition">
                 <ShoppingBag size={24} strokeWidth={2.5} />

@@ -4,7 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { Search, Heart, ArrowUpDown, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getImageUrl } from '../utils';
+import { getImageUrl } from '../utils'; // 👈 Using the helper
 
 const Home = () => {
     const { user } = useContext(AuthContext);
@@ -23,12 +23,12 @@ const Home = () => {
     const categories = ["All", "Men", "Women", "Kids", "Toys", "Beauty", "Home", "Art", "Sports", "Electronics", "Accessories"];
 
     useEffect(() => {
-        axios.get('https://thriftly-nepal.onrender.com/products')
+        axios.get('http://localhost:5000/products')
             .then(res => setProducts(res.data))
             .catch(err => console.log(err));
 
         if (user) {
-            axios.get(`https://thriftly-nepal.onrender.com/wishlist/${user.id}`).then(res => { 
+            axios.get(`http://localhost:5000/wishlist/${user.id}`).then(res => { 
                 if(Array.isArray(res.data)) setWishlistIds(res.data.map(item => item.id)); 
             });
         }
@@ -40,7 +40,7 @@ const Home = () => {
             toast.error("Please Login to save items");
             return;
         }
-        axios.post('https://thriftly-nepal.onrender.com/wishlist/toggle', { user_id: user.id, product_id: productId }, { withCredentials: true })
+        axios.post('http://localhost:5000/wishlist/toggle', { user_id: user.id, product_id: productId }, { withCredentials: true })
             .then(res => { 
                 if(res.data.Status === "Added") {
                     setWishlistIds([...wishlistIds, productId]);
@@ -107,7 +107,7 @@ const Home = () => {
                     {filteredProducts.map((item) => (
                         <Link to={`/product/${item.id}`} key={item.id} className="group relative flex flex-col bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 h-full">
                             
-                            {/* 🆕 FIXED IMAGE HEIGHT: Aspect Ratio is now Square (1:1) */}
+                            {/* 🆕 FIXED IMAGE HEIGHT: Aspect Ratio is Square (1:1) */}
                             <div className="aspect-square w-full bg-stone-100 relative overflow-hidden">
                                 <img src={getImageUrl(item.image_url)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-700" />
                                 
