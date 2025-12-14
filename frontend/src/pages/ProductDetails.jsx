@@ -21,7 +21,7 @@ const ProductDetails = () => {
     const [activeImage, setActiveImage] = useState("");
 
     useEffect(() => {
-        axios.get(`http://localhost:5000/products/${id}`).then(res => {
+        axios.get(`https://thriftly-nepal.onrender.com/products/${id}`).then(res => {
             setProduct(res.data);
             setActiveImage(res.data.image_url);
             fetchRelated(res.data.category, res.data.id);
@@ -31,7 +31,7 @@ const ProductDetails = () => {
     }, [id]);
 
     const fetchRelated = (category, currentId) => {
-        axios.get('http://localhost:5000/all-products').then(res => {
+        axios.get('https://thriftly-nepal.onrender.com/all-products').then(res => {
             if(Array.isArray(res.data)) {
                 setRelatedProducts(res.data.filter(item => item.category === category && item.id !== currentId).slice(0, 4));
             }
@@ -39,7 +39,7 @@ const ProductDetails = () => {
     };
 
     const fetchSellerRating = (sellerId) => {
-        axios.get(`http://localhost:5000/reviews/${sellerId}`).then(res => setSellerRating(res.data));
+        axios.get(`https://thriftly-nepal.onrender.com/reviews/${sellerId}`).then(res => setSellerRating(res.data));
     };
 
     const handleEsewaPayment = (e) => {

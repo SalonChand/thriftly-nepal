@@ -34,15 +34,15 @@ const Profile = () => {
 
     const refreshData = () => {
         if(!user) return;
-        axios.get(`http://localhost:5000/my-listings/${user.id}`).then(res => setListings(Array.isArray(res.data) ? res.data : [])).catch(() => setListings([]));
-        axios.get(`http://localhost:5000/my-orders/${user.id}`).then(res => setOrders(Array.isArray(res.data) ? res.data : [])).catch(() => setOrders([]));
-        axios.get(`http://localhost:5000/wishlist/${user.id}`).then(res => setWishlist(Array.isArray(res.data) ? res.data : [])).catch(() => setWishlist([]));
-        axios.get(`http://localhost:5000/my-sales/${user.id}`).then(res => setMySales(Array.isArray(res.data) ? res.data : [])).catch(() => setMySales([]));
+        axios.get(`https://thriftly-nepal.onrender.com/my-listings/${user.id}`).then(res => setListings(Array.isArray(res.data) ? res.data : [])).catch(() => setListings([]));
+        axios.get(`https://thriftly-nepal.onrender.com/my-orders/${user.id}`).then(res => setOrders(Array.isArray(res.data) ? res.data : [])).catch(() => setOrders([]));
+        axios.get(`https://thriftly-nepal.onrender.com/wishlist/${user.id}`).then(res => setWishlist(Array.isArray(res.data) ? res.data : [])).catch(() => setWishlist([]));
+        axios.get(`https://thriftly-nepal.onrender.com/my-sales/${user.id}`).then(res => setMySales(Array.isArray(res.data) ? res.data : [])).catch(() => setMySales([]));
     };
 
     const handleDelete = (id) => {
         if(window.confirm("Delete this item?")) {
-            axios.delete(`http://localhost:5000/products/${id}`).then(() => refreshData());
+            axios.delete(`https://thriftly-nepal.onrender.com/products/${id}`).then(() => refreshData());
         }
     };
 
@@ -53,7 +53,7 @@ const Profile = () => {
         formData.append('bio', editBio);
         if(editFile) formData.append('profile_pic', editFile);
 
-        axios.put(`http://localhost:5000/user/${user.id}`, formData)
+        axios.put(`https://thriftly-nepal.onrender.com/user/${user.id}`, formData)
             .then(res => {
                 const updatedUser = { ...user, ...res.data.user };
                 login(updatedUser); 
@@ -63,7 +63,7 @@ const Profile = () => {
     };
 
     const updateStatus = (orderId, newStatus) => {
-        axios.put(`http://localhost:5000/order-status/${orderId}`, { status: newStatus }, { withCredentials: true })
+        axios.put(`https://thriftly-nepal.onrender.com/order-status/${orderId}`, { status: newStatus }, { withCredentials: true })
             .then(res => {
                 if(res.data.Status === "Success") {
                     toast.success(`Order marked as ${newStatus}`);
@@ -73,7 +73,7 @@ const Profile = () => {
     };
 
     const handleSubmitReview = () => {
-        axios.post('http://localhost:5000/reviews', {
+        axios.post('https://thriftly-nepal.onrender.com/reviews', {
             seller_id: selectedSellerId,
             rating,
             comment
