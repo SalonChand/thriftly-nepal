@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
 import toast from 'react-hot-toast';
 import { getImageUrl } from '../utils'; 
+import Chat from '../components/Chat'; // 👈 1. IMPORT CHAT COMPONENT
 
 const ProductDetails = () => {
     const { id } = useParams();
@@ -20,9 +21,10 @@ const ProductDetails = () => {
     
     // UI States
     const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const [showOfferModal, setShowOfferModal] = useState(false); // 🆕 Offer Modal
-    const [offerAmount, setOfferAmount] = useState("");          // 🆕 Offer Input
+    const [showOfferModal, setShowOfferModal] = useState(false); 
+    const [offerAmount, setOfferAmount] = useState("");          
     const [activeImage, setActiveImage] = useState("");
+    const [showChat, setShowChat] = useState(false); // 👈 2. CHAT STATE
 
     useEffect(() => {
         axios.get(`http://localhost:5000/products/${id}`).then(res => {
@@ -46,7 +48,7 @@ const ProductDetails = () => {
         axios.get(`http://localhost:5000/reviews/${sellerId}`).then(res => setSellerRating(res.data));
     };
 
-    // 🆕 MAKE OFFER LOGIC
+    // MAKE OFFER LOGIC
     const handleMakeOffer = () => {
         if (!user) return navigate('/login');
         if (!offerAmount) return toast.error("Enter an amount");
@@ -100,11 +102,10 @@ const ProductDetails = () => {
         form.submit();
     };
 
+    // 👈 3. OPEN CHAT WINDOW
     const handleChat = () => {
         if (!user) return navigate('/login');
-        const phone = product.seller_phone || "9800000000"; 
-        const text = `Hi, I am interested in your item "${product.title}" on ThriftLy.`;
-        window.open(`https://wa.me/977${phone}?text=${encodeURIComponent(text)}`, '_blank');
+        setShowChat(true);
     };
 
     if (!product) return <div className="text-center mt-20 text-stone-500">Loading...</div>;
@@ -181,19 +182,29 @@ const ProductDetails = () => {
                                 {/* BUY NOW */}
                                 <button onClick={() => user ? setShowPaymentModal(true) : navigate('/login')} className="col-span-2 bg-[#60BB46] text-white py-4 rounded-xl font-bold text-lg hover:bg-[#52a13b] transition shadow-lg shadow-green-100">Pay with eSewa</button>
                                 
-                                {/* MAKE OFFER (NEW) */}
+                                {/* MAKE OFFER */}
                                 <button onClick={() => user ? setShowOfferModal(true) : navigate('/login')} className="bg-stone-900 text-white py-3 rounded-xl font-bold hover:bg-stone-800 transition flex justify-center items-center gap-2">
                                     <Gavel size={18}/> Make Offer
                                 </button>
 
-                                {/* CHAT */}
-                                <button onClick={handleChat} className="bg-white border-2 border-stone-200 text-stone-700 py-3 rounded-xl font-bold hover:bg-green-50 hover:border-green-500 hover:text-green-600 transition flex justify-center items-center gap-2">
+                                {/* CHAT BUTTON */}
+                                <button onClick={handleChat} className="bg-white border-2 border-stone-200 text-stone-700 py-3 rounded-xl font-bold text-lg hover:bg-green-50 hover:border-green-500 hover:text-green-600 transition flex justify-center items-center gap-2">
                                     <MessageCircle size={18} /> Chat
                                 </button>
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* 👈 4. RENDER CHAT COMPONENT */}
+                {showChat && (
+                    <Chat 
+                        currentUser={user} 
+                        sellerId={product.seller_id} 
+                        productId={product.id} 
+                        onClose={() => setShowChat(false)} 
+                    />
+                )}
             </div>
         </div>
     );
