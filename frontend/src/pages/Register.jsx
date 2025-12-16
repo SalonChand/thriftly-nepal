@@ -20,7 +20,7 @@ const Register = () => {
 
     const handleRegister = (e) => {
         e.preventDefault();
-        axios.post('https://thriftly-nepal.onrender.com/register', values)
+        axios.post('http://localhost:5000/register', values)
             .then(res => {
                 if(res.data.Status === "Success") {
                     setStep(2);
@@ -35,7 +35,7 @@ const Register = () => {
 
     const handleVerify = (e) => {
         e.preventDefault();
-        axios.post('https://thriftly-nepal.onrender.com/verify', { email: values.email, otp: otp })
+        axios.post('http://localhost:5000/verify', { email: values.email, otp: otp })
             .then(res => {
                 if(res.data.Status === "Success") {
                     alert("Account Verified! Please Login.");

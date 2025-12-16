@@ -23,7 +23,7 @@ const Home = () => {
     const categories = ["All", "Men", "Women", "Kids", "Toys", "Beauty", "Home", "Art", "Sports", "Electronics", "Accessories"];
 
     // 🔗 API URL (Easier to change here)
-    const API_URL = "https://thriftly-nepal.onrender.com";
+    const API_URL = "http://localhost:5000";
 
     useEffect(() => {
         // Fetch products from Cloud

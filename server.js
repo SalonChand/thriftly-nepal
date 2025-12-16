@@ -1,5 +1,4 @@
 require('dotenv').config();
-
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
@@ -10,35 +9,13 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const nodemailer = require('nodemailer');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-const SECRET_KEY = process.env.JWT_SECRET || "supersecretkey"; 
+const PORT = 5000;
+const SECRET_KEY = "supersecretkey"; 
 
-// 1. FIX CORS FOR DEPLOYMENT
-// We list ALL possible URLs your frontend might come from
-// ALLOW ANY VERCEL APP TO CONNECT
 app.use(cors({ 
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        
-        // 1. Allow Localhost (for testing)
-        // 2. Allow ANY Vercel Deployment (ends with .vercel.app)
-        // 3. Allow Render (Self)
-        if (
-            origin.includes("localhost") || 
-            origin.includes(".vercel.app") || 
-            origin.includes("onrender.com")
-        ) {
-            return callback(null, true);
-        } else {
-            console.log("Blocked by CORS:", origin); // Debugging log
-            return callback(new Error('Not allowed by CORS'));
-        }
-    },
+    origin: ["http://localhost:5173", "http://localhost:4173"], 
     methods: ["POST", "GET", "PUT", "DELETE"], 
     credentials: true 
 }));
@@ -46,47 +23,41 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// CLOUDINARY CONFIG
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// LOCAL UPLOADS
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+app.use('/uploads', express.static(uploadDir));
 
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'thriftly_uploads',
-        allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
-    },
-});
-const upload = multer({ storage: storage });
-
-// EMAIL CONFIG
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-});
-
-// DATABASE CONNECTION POOL (Cloud Ready)
+// DATABASE
 const db = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost', 
-    user: process.env.DB_USER || 'root', 
-    password: process.env.DB_PASS || '', 
-    database: process.env.DB_NAME || 'thrift_store_db',
-    port: process.env.DB_PORT || 3306,
-    ssl: { rejectUnauthorized: false }, 
+    host: 'localhost', 
+    user: 'root', 
+    password: '', // ⚠️ CHECK YOUR PASSWORD
+    database: 'thrift_store_db',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
 });
 
 db.getConnection((err, connection) => {
-    if (err) console.log("❌ DB Error:", err.message);
+    if (err) console.log("❌ Local DB Error:", err.message);
     else {
-        console.log('✅ MySQL Connected');
+        console.log('✅ Local MySQL Connected');
         connection.release();
     }
+});
+
+// MULTER
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+});
+const upload = multer({ storage: storage });
+
+// EMAIL
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
 });
 
 // MIDDLEWARE
@@ -100,18 +71,17 @@ const verifyUser = (req, res, next) => {
     });
 };
 
-// --- AUTH ROUTES ---
+// --- ROUTES (Fixed Return Statements) ---
+
 app.post('/register', (req, res) => {
     const { username, email, password, phone } = req.body;
     const otp = Math.floor(1000 + Math.random() * 9000);
     const sql = "INSERT INTO users (`username`, `email`, `password`, `phone`, `otp_code`, `is_verified`) VALUES (?)";
-    
     bcrypt.hash(password.toString(), 10, (err, hash) => {
-        if (err) return res.json({ Error: "Error hashing" });
-        
+        if (err) return res.json({ Error: "Hash Error" });
         db.query(sql, [[username, email, hash, phone, otp, 0]], (err2) => {
             if (err2) return res.json({ Error: "User exists" });
-            transporter.sendMail({ from: 'ThriftLy', to: email, subject: 'Verify Code', text: `Your OTP: ${otp}` }).catch(e => console.log(e));
+            transporter.sendMail({ from: 'ThriftLy', to: email, subject: 'Verify', text: `OTP: ${otp}` }).catch(console.log);
             return res.json({ Status: "Success" });
         });
     });
@@ -134,20 +104,12 @@ app.post('/login', (req, res) => {
     db.query("SELECT * FROM users WHERE email = ?", [req.body.email], (err, data) => {
         if (err) return res.json({ Error: "DB Error" });
         if (data.length > 0) {
-            if (data[0].is_verified === 0) return res.json({ Error: "Not Verified" });
-            
+            if(data[0].is_verified === 0) return res.json({ Error: "Not Verified" });
             bcrypt.compare(req.body.password.toString(), data[0].password, (err2, response) => {
                 if (response) {
                     const { id, username, role, profile_pic, bio } = data[0];
                     const token = jwt.sign({ username, id, role }, SECRET_KEY, { expiresIn: '1d' });
-                    
-                    // 2. FIX COOKIES FOR DEPLOYMENT (Vercel -> Render)
-                    res.cookie('token', token, { 
-                        httpOnly: true, 
-                        sameSite: 'none', // Critical for Cross-Site logic
-                        secure: true // Essential for HTTPS
-                    });
-                    
+                    res.cookie('token', token);
                     return res.json({ Status: "Success", user: { id, username, role, profile_pic, bio }, token });
                 } else {
                     return res.json({ Error: "Wrong Password" });
@@ -159,23 +121,20 @@ app.post('/login', (req, res) => {
     });
 });
 
-// --- PRODUCT ROUTES ---
+// Products
 app.post('/products', verifyUser, upload.array('images', 5), (req, res) => {
     const { title, description, price, category, size, condition } = req.body;
-    const mainImage = (req.files && req.files.length > 0) ? req.files[0].path : null;
+    const mainImage = (req.files && req.files.length > 0) ? req.files[0].filename : null; 
 
     const sql = "INSERT INTO products (`title`, `description`, `price`, `category`, `image_url`, `seller_id`, `size`, `item_condition`) VALUES (?)";
     const values = [title, description, price, category, mainImage, req.user_id, size, condition];
     
     db.query(sql, [values], (err, result) => {
-        if (err) { console.log(err); return res.json({ Error: "Upload Error" }); }
-        
+        if (err) return res.json({ Error: "Upload Error" });
         const productId = result.insertId;
         if (req.files && req.files.length > 0) {
-            const imageValues = req.files.map(file => [productId, file.path]);
-            db.query("INSERT INTO product_images (product_id, image_url) VALUES ?", [imageValues], (err2) => {
-                if(err2) console.log("Extra image save error");
-            });
+            const imageValues = req.files.map(file => [productId, file.filename]);
+            db.query("INSERT INTO product_images (product_id, image_url) VALUES ?", [imageValues], (err2) => { if(err2) console.log(err2); });
         }
         return res.json({ Status: "Success" });
     });
@@ -183,14 +142,14 @@ app.post('/products', verifyUser, upload.array('images', 5), (req, res) => {
 
 app.get('/products', (req, res) => {
     db.query("SELECT * FROM products WHERE is_sold = 0 ORDER BY created_at DESC", (err, data) => {
-        if (err) return res.json([]);
+        if(err) return res.json([]);
         return res.json(data);
     });
 });
 
 app.get('/all-products', (req, res) => {
     db.query("SELECT * FROM products ORDER BY created_at DESC", (err, data) => {
-        if (err) return res.json([]);
+        if(err) return res.json([]);
         return res.json(data);
     });
 });
@@ -198,43 +157,47 @@ app.get('/all-products', (req, res) => {
 app.get('/products/:id', (req, res) => {
     const sql = "SELECT products.*, users.phone as seller_phone, users.username as seller_name FROM products JOIN users ON products.seller_id = users.id WHERE products.id = ?";
     db.query(sql, [req.params.id], (err, productData) => {
-        if (err || productData.length === 0) return res.json({});
+        if(err || productData.length === 0) return res.json({});
         const product = productData[0];
-        
         db.query("SELECT image_url FROM product_images WHERE product_id = ?", [req.params.id], (err2, imageData) => {
             const images = imageData ? imageData.map(img => img.image_url) : [];
-            if (product.image_url && !images.includes(product.image_url)) {
-                images.unshift(product.image_url);
-            }
+            if (product.image_url && !images.includes(product.image_url)) images.unshift(product.image_url);
             product.images = images;
             return res.json(product);
         });
     });
 });
 
+// Profile
+app.put('/user/:id', upload.single('profile_pic'), (req, res) => {
+    let sql = "UPDATE users SET username = ?, bio = ?";
+    let params = [req.body.username, req.body.bio];
+    if (req.file) { sql += ", profile_pic = ?"; params.push(req.file.filename); }
+    sql += " WHERE id = ?"; params.push(req.params.id);
+    db.query(sql, params, (err) => {
+        if(err) return res.json({Error: "Update Error"});
+        db.query("SELECT id, username, email, bio, profile_pic, role FROM users WHERE id = ?", [req.params.id], (err2, data) => {
+            return res.json({ Status: "Success", user: data[0] });
+        });
+    });
+});
+
+// Other
 app.post('/buy/:id', verifyUser, (req, res) => {
     const { seller_id } = req.body;
     db.query("UPDATE products SET is_sold = 1 WHERE id = ?", [req.params.id], (err) => {
-        if (err) return res.json({ Error: "Update Failed" });
+        if(err) return res.json({ Error: "Update Failed" });
         db.query("INSERT INTO orders (`product_id`, `buyer_id`, `seller_id`) VALUES (?)", [[req.params.id, req.user_id, seller_id]], () => {
             return res.json({ Status: "Success" });
         });
     });
 });
 
-app.post('/reviews', verifyUser, (req, res) => {
-    const { seller_id, rating, comment } = req.body;
-    if (Number(seller_id) === Number(req.user_id)) return res.json({ Error: "Self-review blocked" });
-    db.query("INSERT INTO reviews (`reviewer_id`, `seller_id`, `rating`, `comment`) VALUES (?)", [[req.user_id, seller_id, rating, comment]], (err) => {
-        if (err) return res.json({ Error: "DB Error" });
-        return res.json({ Status: "Success" });
-    });
-});
-
-app.get('/reviews/:seller_id', (req, res) => {
-    db.query("SELECT AVG(rating) as avg_rating, COUNT(*) as count FROM reviews WHERE seller_id = ?", [req.params.seller_id], (err, data) => {
-        if (err) return res.json({ avg: 0, count: 0 });
-        return res.json({ avg: data[0].avg_rating || 0, count: data[0].count || 0 });
+app.delete('/products/:id', (req, res) => {
+    db.query("DELETE FROM product_images WHERE product_id = ?", [req.params.id], () => {
+        db.query("DELETE FROM products WHERE id = ?", [req.params.id], () => {
+            return res.json({ Status: "Success" });
+        });
     });
 });
 
@@ -251,14 +214,6 @@ app.delete('/users/:id', (req, res) => {
     db.query("DELETE FROM users WHERE id = ?", [req.params.id], () => res.json({ Status: "Success" }));
 });
 
-app.delete('/products/:id', (req, res) => {
-    db.query("DELETE FROM product_images WHERE product_id = ?", [req.params.id], () => {
-        db.query("DELETE FROM products WHERE id = ?", [req.params.id], () => {
-            return res.json({ Status: "Success" });
-        });
-    });
-});
-
 app.get('/my-listings/:id', (req, res) => {
     db.query("SELECT * FROM products WHERE seller_id = ?", [req.params.id], (err, data) => res.json(data));
 });
@@ -271,19 +226,6 @@ app.get('/my-orders/:id', (req, res) => {
 app.get('/my-sales/:id', (req, res) => {
     const sql = "SELECT orders.id as order_id, orders.status, orders.order_date, products.title, products.image_url, products.price, users.username as buyer_name, users.phone as buyer_phone FROM orders JOIN products ON orders.product_id = products.id JOIN users ON orders.buyer_id = users.id WHERE orders.seller_id = ? ORDER BY orders.order_date DESC";
     db.query(sql, [req.params.id], (err, data) => res.json(data));
-});
-
-app.put('/user/:id', upload.single('profile_pic'), (req, res) => {
-    let sql = "UPDATE users SET username = ?, bio = ?";
-    let params = [req.body.username, req.body.bio];
-    if (req.file) { sql += ", profile_pic = ?"; params.push(req.file.path); }
-    sql += " WHERE id = ?"; params.push(req.params.id);
-    db.query(sql, params, (err) => {
-        if(err) return res.json({Error: "Update Failed"});
-        db.query("SELECT id, username, email, bio, profile_pic, role FROM users WHERE id = ?", [req.params.id], (err2, data) => {
-            return res.json({ Status: "Success", user: data[0] });
-        });
-    });
 });
 
 app.post('/wishlist/toggle', verifyUser, (req, res) => {
@@ -301,9 +243,24 @@ app.get('/wishlist/:userId', (req, res) => {
     db.query("SELECT products.*, wishlist.id as wishlist_id FROM wishlist JOIN products ON wishlist.product_id = products.id WHERE wishlist.user_id = ?", [req.params.userId], (err, data) => res.json(data));
 });
 
+app.post('/reviews', verifyUser, (req, res) => {
+    const { seller_id, rating, comment } = req.body;
+    if (Number(seller_id) === Number(req.user_id)) return res.json({ Error: "No self-review" });
+    db.query("INSERT INTO reviews (`reviewer_id`, `seller_id`, `rating`, `comment`) VALUES (?)", [[req.user_id, seller_id, rating, comment]], (err) => {
+        if (err) return res.json({ Error: "DB Error" });
+        return res.json({ Status: "Success" });
+    });
+});
+
+app.get('/reviews/:seller_id', (req, res) => {
+    db.query("SELECT AVG(rating) as avg_rating, COUNT(*) as count FROM reviews WHERE seller_id = ?", [req.params.seller_id], (err, data) => {
+        return res.json({ avg: data[0].avg_rating || 0, count: data[0].count || 0 });
+    });
+});
+
 app.post('/contact', (req, res) => {
     transporter.sendMail({ from: 'ThriftLy', to: process.env.EMAIL_USER, subject: `Support: ${req.body.name}`, text: req.body.message })
-        .catch(e => console.log(e));
+        .catch(console.log);
     res.json({ Status: "Success" });
 });
 
@@ -326,4 +283,4 @@ app.post('/reset-password', (req, res) => {
     });
 });
 
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Local Server running on http://localhost:${PORT}`));

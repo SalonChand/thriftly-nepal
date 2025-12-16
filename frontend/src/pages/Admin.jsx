@@ -23,17 +23,17 @@ const Admin = () => {
     }, [user, navigate]);
 
     const refreshData = () => {
-        axios.get('https://thriftly-nepal.onrender.com/users').then(res => setUsers(res.data));
-        axios.get('https://thriftly-nepal.onrender.com/all-products').then(res => setProducts(res.data));
-        axios.get('https://thriftly-nepal.onrender.com/admin/orders').then(res => {
+        axios.get('http://localhost:5000/users').then(res => setUsers(res.data));
+        axios.get('http://localhost:5000/all-products').then(res => setProducts(res.data));
+        axios.get('http://localhost:5000/admin/orders').then(res => {
             setOrders(res.data);
             const total = res.data.reduce((sum, order) => sum + Number(order.price), 0);
             setTotalRevenue(total);
         });
     };
 
-    const deleteUser = (id) => { if(window.confirm("Delete User?")) axios.delete(`https://thriftly-nepal.onrender.com/users/${id}`).then(() => refreshData()); };
-    const deleteProduct = (id) => { if(window.confirm("Delete Product?")) axios.delete(`https://thriftly-nepal.onrender.com/products/${id}`).then(() => refreshData()); };
+    const deleteUser = (id) => { if(window.confirm("Delete User?")) axios.delete(`http://localhost:5000/users/${id}`).then(() => refreshData()); };
+    const deleteProduct = (id) => { if(window.confirm("Delete Product?")) axios.delete(`http://localhost:5000/products/${id}`).then(() => refreshData()); };
 
     if (!user || user.role !== 'admin') return <div className="p-10 text-center">Checking Privileges...</div>;
 
