@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
-import { Send, X, MessageSquare, Loader } from 'lucide-react';
+import axios from 'axios'; // 1. Added Axios for history
+import { Send, X, MessageSquare, Loader, Check } from 'lucide-react';
 
 // Connect to Backend
 const socket = io.connect("http://localhost:5000");
@@ -9,14 +10,19 @@ const Chat = ({ currentUser, sellerId, productId, onClose }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [loading, setLoading] = useState(true);
-    
-    // Auto-scroll to bottom
     const messagesEndRef = useRef(null);
 
-    // 1. Generate Consistent Room ID
-    // We sort IDs so "User1 talking to User2" is the SAME room as "User2 talking to User1"
+    // Create Room ID
     const participants = [currentUser.id, sellerId].sort();
     const roomId = `prod-${productId}-u${participants[0]}-u${participants[1]}`;
+
+    // 🕒 HELPER: Format Time correctly
+    const formatTime = (msg) => {
+        // Use 'created_at' (DB) or 'time' (Live) or current time
+        const dateStr = msg.created_at || msg.time || new Date().toISOString();
+        const date = new Date(dateStr);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -27,27 +33,39 @@ const Chat = ({ currentUser, sellerId, productId, onClose }) => {
             console.log("🔌 Joining Room:", roomId);
             socket.emit('join_room', roomId);
             
-            // Fetch old messages via API (Optional but recommended)
-            // For now, we rely on the socket for live chat
-            setLoading(false);
+            // 2. FETCH HISTORY FROM DB
+            axios.get('http://localhost:5000/messages', {
+                params: { 
+                    sender_id: currentUser.id, 
+                    receiver_id: sellerId, 
+                    product_id: productId 
+                },
+                withCredentials: true
+            }).then(res => {
+                if(Array.isArray(res.data)) {
+                    setMessages(res.data);
+                }
+                setLoading(false);
+                setTimeout(scrollToBottom, 100);
+            }).catch(err => {
+                console.log("Error loading chat:", err);
+                setLoading(false);
+            });
         }
 
-        // 2. LISTEN FOR LIVE MESSAGES
         const handleReceiveMessage = (data) => {
-            console.log("📩 New Message Received:", data);
             setMessages((prev) => [...prev, data]);
             scrollToBottom();
         };
 
         socket.on('receive_message', handleReceiveMessage);
 
-        // Cleanup to prevent double messages
         return () => {
             socket.off('receive_message', handleReceiveMessage);
         };
     }, [roomId, currentUser]);
 
-    // Scroll down when messages change
+    // Scroll when messages update
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
@@ -55,19 +73,17 @@ const Chat = ({ currentUser, sellerId, productId, onClose }) => {
     const sendMessage = async () => {
         if (newMessage.trim() === "") return;
 
+        // 3. Create Message Object
         const messageData = {
             room: roomId,
             sender_id: currentUser.id,
             receiver_id: sellerId,
             product_id: productId,
             message: newMessage,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: new Date().toISOString(), // Use ISO format for consistency
         };
 
-        // 3. SEND TO SERVER
         await socket.emit('send_message', messageData);
-        
-        // 4. UPDATE OWN UI INSTANTLY
         setMessages((list) => [...list, messageData]);
         setNewMessage("");
         scrollToBottom();
@@ -89,7 +105,7 @@ const Chat = ({ currentUser, sellerId, productId, onClose }) => {
                 <button onClick={onClose} className="hover:bg-stone-700 p-1 rounded-full transition"><X size={16} /></button>
             </div>
 
-            {/* Messages Area */}
+            {/* Messages List */}
             <div className="flex-1 p-4 overflow-y-auto bg-[#FDFBF7] flex flex-col gap-3">
                 {loading && <div className="flex justify-center p-4"><Loader className="animate-spin text-stone-400"/></div>}
                 
@@ -101,15 +117,20 @@ const Chat = ({ currentUser, sellerId, productId, onClose }) => {
 
                 {messages.map((msg, index) => (
                     <div key={index} className={`flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`p-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${
+                        <div className={`p-3 rounded-2xl max-w-[85%] shadow-sm relative ${
                             msg.sender_id === currentUser.id 
                             ? 'bg-orange-600 text-white rounded-tr-none' 
                             : 'bg-white border text-stone-800 rounded-tl-none'
                         }`}>
-                            {msg.message}
-                            <p className={`text-[9px] mt-1 text-right ${msg.sender_id === currentUser.id ? 'text-orange-200' : 'text-stone-400'}`}>
-                                {msg.time}
-                            </p>
+                            <p className="text-sm mb-1">{msg.message}</p>
+                            
+                            {/* 🕒 TIME DISPLAY */}
+                            <div className={`text-[9px] flex items-center justify-end gap-1 ${
+                                msg.sender_id === currentUser.id ? 'text-orange-200' : 'text-stone-400'
+                            }`}>
+                                {formatTime(msg)}
+                                {msg.sender_id === currentUser.id && <Check size={10} />}
+                            </div>
                         </div>
                     </div>
                 ))}
