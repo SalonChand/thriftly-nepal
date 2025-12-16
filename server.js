@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
@@ -14,6 +15,7 @@ const app = express();
 const PORT = 5000;
 const SECRET_KEY = "supersecretkey"; 
 
+// 1. LOCAL CORS
 app.use(cors({ 
     origin: ["http://localhost:5173", "http://localhost:4173"], 
     methods: ["POST", "GET", "PUT", "DELETE"], 
@@ -23,12 +25,12 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// LOCAL UPLOADS
+// 2. LOCAL IMAGE SERVING
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 app.use('/uploads', express.static(uploadDir));
 
-// DATABASE
+// 3. LOCAL DATABASE
 const db = mysql.createPool({
     host: 'localhost', 
     user: 'root', 
@@ -47,7 +49,7 @@ db.getConnection((err, connection) => {
     }
 });
 
-// MULTER
+// 4. MULTER
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, 'uploads/'),
     filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
@@ -71,12 +73,13 @@ const verifyUser = (req, res, next) => {
     });
 };
 
-// --- ROUTES (Fixed Return Statements) ---
+// --- ROUTES (ALL WRAPPED IN CURLEY BRACES TO PREVENT CRASH) ---
 
 app.post('/register', (req, res) => {
     const { username, email, password, phone } = req.body;
     const otp = Math.floor(1000 + Math.random() * 9000);
     const sql = "INSERT INTO users (`username`, `email`, `password`, `phone`, `otp_code`, `is_verified`) VALUES (?)";
+    
     bcrypt.hash(password.toString(), 10, (err, hash) => {
         if (err) return res.json({ Error: "Hash Error" });
         db.query(sql, [[username, email, hash, phone, otp, 0]], (err2) => {
@@ -104,12 +107,13 @@ app.post('/login', (req, res) => {
     db.query("SELECT * FROM users WHERE email = ?", [req.body.email], (err, data) => {
         if (err) return res.json({ Error: "DB Error" });
         if (data.length > 0) {
-            if(data[0].is_verified === 0) return res.json({ Error: "Not Verified" });
+            if (data[0].is_verified === 0) return res.json({ Error: "Not Verified" });
+            
             bcrypt.compare(req.body.password.toString(), data[0].password, (err2, response) => {
                 if (response) {
                     const { id, username, role, profile_pic, bio } = data[0];
                     const token = jwt.sign({ username, id, role }, SECRET_KEY, { expiresIn: '1d' });
-                    res.cookie('token', token);
+                    res.cookie('token', token, { httpOnly: true });
                     return res.json({ Status: "Success", user: { id, username, role, profile_pic, bio }, token });
                 } else {
                     return res.json({ Error: "Wrong Password" });
@@ -121,20 +125,23 @@ app.post('/login', (req, res) => {
     });
 });
 
-// Products
+// PRODUCTS
 app.post('/products', verifyUser, upload.array('images', 5), (req, res) => {
-    const { title, description, price, category, size, condition } = req.body;
+    const { title, description, price, category, size, condition, location } = req.body;
     const mainImage = (req.files && req.files.length > 0) ? req.files[0].filename : null; 
 
-    const sql = "INSERT INTO products (`title`, `description`, `price`, `category`, `image_url`, `seller_id`, `size`, `item_condition`) VALUES (?)";
-    const values = [title, description, price, category, mainImage, req.user_id, size, condition];
+    const sql = "INSERT INTO products (`title`, `description`, `price`, `category`, `image_url`, `seller_id`, `size`, `item_condition`, `location`) VALUES (?)";
+    const values = [title, description, price, category, mainImage, req.user_id, size, condition, location];
     
     db.query(sql, [values], (err, result) => {
         if (err) return res.json({ Error: "Upload Error" });
+        
         const productId = result.insertId;
         if (req.files && req.files.length > 0) {
             const imageValues = req.files.map(file => [productId, file.filename]);
-            db.query("INSERT INTO product_images (product_id, image_url) VALUES ?", [imageValues], (err2) => { if(err2) console.log(err2); });
+            db.query("INSERT INTO product_images (product_id, image_url) VALUES ?", [imageValues], (err2) => {
+                if(err2) console.log(err2);
+            });
         }
         return res.json({ Status: "Success" });
     });
@@ -142,14 +149,14 @@ app.post('/products', verifyUser, upload.array('images', 5), (req, res) => {
 
 app.get('/products', (req, res) => {
     db.query("SELECT * FROM products WHERE is_sold = 0 ORDER BY created_at DESC", (err, data) => {
-        if(err) return res.json([]);
+        if (err) return res.json([]);
         return res.json(data);
     });
 });
 
 app.get('/all-products', (req, res) => {
     db.query("SELECT * FROM products ORDER BY created_at DESC", (err, data) => {
-        if(err) return res.json([]);
+        if (err) return res.json([]);
         return res.json(data);
     });
 });
@@ -157,8 +164,9 @@ app.get('/all-products', (req, res) => {
 app.get('/products/:id', (req, res) => {
     const sql = "SELECT products.*, users.phone as seller_phone, users.username as seller_name FROM products JOIN users ON products.seller_id = users.id WHERE products.id = ?";
     db.query(sql, [req.params.id], (err, productData) => {
-        if(err || productData.length === 0) return res.json({});
+        if (err || productData.length === 0) return res.json({});
         const product = productData[0];
+        
         db.query("SELECT image_url FROM product_images WHERE product_id = ?", [req.params.id], (err2, imageData) => {
             const images = imageData ? imageData.map(img => img.image_url) : [];
             if (product.image_url && !images.includes(product.image_url)) images.unshift(product.image_url);
@@ -168,28 +176,46 @@ app.get('/products/:id', (req, res) => {
     });
 });
 
-// Profile
-app.put('/user/:id', upload.single('profile_pic'), (req, res) => {
-    let sql = "UPDATE users SET username = ?, bio = ?";
-    let params = [req.body.username, req.body.bio];
-    if (req.file) { sql += ", profile_pic = ?"; params.push(req.file.filename); }
-    sql += " WHERE id = ?"; params.push(req.params.id);
-    db.query(sql, params, (err) => {
-        if(err) return res.json({Error: "Update Error"});
-        db.query("SELECT id, username, email, bio, profile_pic, role FROM users WHERE id = ?", [req.params.id], (err2, data) => {
-            return res.json({ Status: "Success", user: data[0] });
+// OTHER ROUTES
+app.post('/buy/:id', verifyUser, (req, res) => {
+    const { seller_id } = req.body;
+    db.query("UPDATE products SET is_sold = 1 WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.json({ Error: "Update Failed" });
+        db.query("INSERT INTO orders (`product_id`, `buyer_id`, `seller_id`) VALUES (?)", [[req.params.id, req.user_id, seller_id]], () => {
+            return res.json({ Status: "Success" });
         });
     });
 });
 
-// Other
-app.post('/buy/:id', verifyUser, (req, res) => {
-    const { seller_id } = req.body;
-    db.query("UPDATE products SET is_sold = 1 WHERE id = ?", [req.params.id], (err) => {
-        if(err) return res.json({ Error: "Update Failed" });
-        db.query("INSERT INTO orders (`product_id`, `buyer_id`, `seller_id`) VALUES (?)", [[req.params.id, req.user_id, seller_id]], () => {
-            return res.json({ Status: "Success" });
+app.post('/offers', verifyUser, (req, res) => {
+    db.query("INSERT INTO offers (`product_id`, `buyer_id`, `seller_id`, `offer_amount`) VALUES (?)", [[req.body.product_id, req.user_id, req.body.seller_id, req.body.offer_amount]], () => {
+        return res.json({Status: "Success"});
+    });
+});
+
+app.get('/my-offers/:id', verifyUser, (req, res) => {
+    const userId = req.params.id;
+    const sqlRec = "SELECT offers.*, products.title, products.image_url, users.username as buyer_name FROM offers JOIN products ON offers.product_id = products.id JOIN users ON offers.buyer_id = users.id WHERE offers.seller_id = ? AND products.is_sold = 0 ORDER BY created_at DESC";
+    const sqlSent = "SELECT offers.*, products.title, products.image_url, users.username as seller_name FROM offers JOIN products ON offers.product_id = products.id JOIN users ON offers.seller_id = users.id WHERE offers.buyer_id = ? ORDER BY created_at DESC";
+    
+    db.query(sqlRec, [userId], (err, received) => {
+        db.query(sqlSent, [userId], (err2, sent) => {
+            return res.json({ received, sent });
         });
+    });
+});
+
+app.put('/offers/:offerId', verifyUser, (req, res) => {
+    db.query("UPDATE offers SET status = ? WHERE id = ?", [req.body.status, req.params.offerId], () => {
+        return res.json({Status: "Success"});
+    });
+});
+
+app.post('/boost/:id', verifyUser, (req, res) => {
+    const expiresAt = new Date(); 
+    expiresAt.setDate(expiresAt.getDate() + 3);
+    db.query("UPDATE products SET is_featured = 1, featured_expires_at = ? WHERE id = ?", [expiresAt, req.params.id], () => {
+        return res.json({Status: "Success"});
     });
 });
 
@@ -211,7 +237,9 @@ app.get('/admin/orders', (req, res) => {
 });
 
 app.delete('/users/:id', (req, res) => {
-    db.query("DELETE FROM users WHERE id = ?", [req.params.id], () => res.json({ Status: "Success" }));
+    db.query("DELETE FROM users WHERE id = ?", [req.params.id], () => {
+        return res.json({ Status: "Success" });
+    });
 });
 
 app.get('/my-listings/:id', (req, res) => {
@@ -226,6 +254,19 @@ app.get('/my-orders/:id', (req, res) => {
 app.get('/my-sales/:id', (req, res) => {
     const sql = "SELECT orders.id as order_id, orders.status, orders.order_date, products.title, products.image_url, products.price, users.username as buyer_name, users.phone as buyer_phone FROM orders JOIN products ON orders.product_id = products.id JOIN users ON orders.buyer_id = users.id WHERE orders.seller_id = ? ORDER BY orders.order_date DESC";
     db.query(sql, [req.params.id], (err, data) => res.json(data));
+});
+
+app.put('/user/:id', upload.single('profile_pic'), (req, res) => {
+    let sql = "UPDATE users SET username = ?, bio = ?";
+    let params = [req.body.username, req.body.bio];
+    if (req.file) { sql += ", profile_pic = ?"; params.push(req.file.filename); }
+    sql += " WHERE id = ?"; params.push(req.params.id);
+    db.query(sql, params, (err) => {
+        if(err) return res.json({Error: "Update Error"});
+        db.query("SELECT id, username, email, bio, profile_pic, role FROM users WHERE id = ?", [req.params.id], (err2, data) => {
+            return res.json({ Status: "Success", user: data[0] });
+        });
+    });
 });
 
 app.post('/wishlist/toggle', verifyUser, (req, res) => {
@@ -245,9 +286,9 @@ app.get('/wishlist/:userId', (req, res) => {
 
 app.post('/reviews', verifyUser, (req, res) => {
     const { seller_id, rating, comment } = req.body;
-    if (Number(seller_id) === Number(req.user_id)) return res.json({ Error: "No self-review" });
+    if(Number(seller_id) === Number(req.user_id)) return res.json({Error: "No self-review"});
     db.query("INSERT INTO reviews (`reviewer_id`, `seller_id`, `rating`, `comment`) VALUES (?)", [[req.user_id, seller_id, rating, comment]], (err) => {
-        if (err) return res.json({ Error: "DB Error" });
+        if(err) return res.json({Error: "DB Error"});
         return res.json({ Status: "Success" });
     });
 });
@@ -267,7 +308,7 @@ app.post('/contact', (req, res) => {
 app.post('/forgot-password', (req, res) => {
     const otp = Math.floor(1000 + Math.random() * 9000);
     db.query("UPDATE users SET otp_code = ? WHERE email = ?", [otp, req.body.email], (err, result) => {
-        if (err || result.affectedRows === 0) return res.json({ Error: "Email not found" });
+        if(err || result.affectedRows === 0) return res.json({ Error: "Email not found" });
         transporter.sendMail({ from: 'ThriftLy', to: req.body.email, subject: 'Reset Password', text: `OTP: ${otp}` });
         return res.json({ Status: "Success" });
     });

@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, X } from 'lucide-react';
+import { UploadCloud, X, MapPin } from 'lucide-react'; // Added MapPin icon
 import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -12,9 +12,11 @@ const Sell = () => {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [price, setPrice] = useState("");
-    const [category, setCategory] = useState("Men"); // Default
+    const [category, setCategory] = useState("Men"); 
     const [size, setSize] = useState("Free");
     const [condition, setCondition] = useState("Good");
+    // ✅ MOVED INSIDE COMPONENT
+    const [location, setLocation] = useState("Kathmandu"); 
     
     // MULTIPLE FILES STATE
     const [files, setFiles] = useState([]); 
@@ -29,7 +31,6 @@ const Sell = () => {
         }
         setFiles([...files, ...selectedFiles]);
         
-        // Generate Previews
         const newPreviews = selectedFiles.map(file => URL.createObjectURL(file));
         setPreviews([...previews, ...newPreviews]);
     };
@@ -48,12 +49,14 @@ const Sell = () => {
             formData.append('images', file); 
         });
 
+        // Append all data including location
         formData.append('title', title);
         formData.append('description', description);
         formData.append('price', price);
         formData.append('category', category);
         formData.append('size', size);
         formData.append('condition', condition);
+        formData.append('location', location); // 📍 Sending Location
 
         const loadingToast = toast.loading("Uploading...");
 
@@ -78,7 +81,7 @@ const Sell = () => {
                 <h2 className="text-3xl font-serif font-bold text-stone-900 mb-6">Sell an Item</h2>
                 <form onSubmit={handleUpload} className="space-y-4">
                     
-                    {/* IMAGE UPLOAD (Multiple) */}
+                    {/* IMAGE UPLOAD */}
                     <div className="grid grid-cols-3 gap-2 mb-4">
                         {previews.map((src, index) => (
                             <div key={index} className="relative aspect-square rounded-xl overflow-hidden border">
@@ -105,7 +108,7 @@ const Sell = () => {
                         {/* Price */}
                         <input type="number" placeholder="Price (Rs)" onChange={e => setPrice(e.target.value)} required className="w-full p-3 rounded-lg bg-stone-50 border border-stone-200 outline-none" />
                         
-                        {/* 🆕 UPDATED CATEGORIES (Synced with Home Page) */}
+                        {/* Categories */}
                         <select onChange={e => setCategory(e.target.value)} className="w-full p-3 rounded-lg bg-stone-50 border border-stone-200 outline-none cursor-pointer">
                             <option value="Men">Men</option>
                             <option value="Women">Women</option>
@@ -113,22 +116,46 @@ const Sell = () => {
                             <option value="Toys">Toys</option>
                             <option value="Beauty">Beauty</option>
                             <option value="Home">Home</option>
-                            <option value="Art">Art</option> {/* 🎨 Added Art */}
+                            <option value="Art">Art</option>
                             <option value="Sports">Sports</option>
                             <option value="Electronics">Electronics</option>
                             <option value="Accessories">Accessories</option>
                         </select>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* 3-Column Grid for Details */}
+                    <div className="grid grid-cols-3 gap-2">
                         {/* Size */}
-                        <select onChange={e => setSize(e.target.value)} className="w-full p-3 rounded-lg bg-stone-50 border border-stone-200 outline-none cursor-pointer">
-                            <option>Free</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option>
-                        </select>
+                        <div>
+                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Size</label>
+                            <select onChange={e => setSize(e.target.value)} className="w-full p-2 rounded-lg bg-stone-50 border border-stone-200 outline-none cursor-pointer text-sm">
+                                <option>Free</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option>
+                            </select>
+                        </div>
                         {/* Condition */}
-                        <select onChange={e => setCondition(e.target.value)} className="w-full p-3 rounded-lg bg-stone-50 border border-stone-200 outline-none cursor-pointer">
-                            <option>Good</option><option>New</option><option>Like New</option><option>Fair</option>
-                        </select>
+                        <div>
+                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Condition</label>
+                            <select onChange={e => setCondition(e.target.value)} className="w-full p-2 rounded-lg bg-stone-50 border border-stone-200 outline-none cursor-pointer text-sm">
+                                <option>Good</option><option>New</option><option>Like New</option><option>Fair</option>
+                            </select>
+                        </div>
+                        {/* 📍 Location */}
+                        <div>
+                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Location</label>
+                            <div className="relative">
+                                <MapPin size={14} className="absolute left-1 top-2.5 text-stone-400"/>
+                                <select onChange={e => setLocation(e.target.value)} className="w-full pl-6 p-2 rounded-lg bg-stone-50 border border-stone-200 outline-none cursor-pointer text-sm">
+                                    <option>Kathmandu</option>
+                                    <option>Lalitpur</option>
+                                    <option>Bhaktapur</option>
+                                    <option>Pokhara</option>
+                                    <option>Chitwan</option>
+                                    <option>Biratnagar</option>
+                                    <option>Butwal</option>
+                                    <option>Dharan</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <button className="w-full bg-stone-900 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition shadow-lg mt-4">List Item</button>
