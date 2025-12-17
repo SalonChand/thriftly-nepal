@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import { Search, Heart, ArrowUpDown, Filter, Users } from 'lucide-react';
+import { Search, Heart, ArrowUpDown, Filter, Users } from 'lucide-react'; // 👈 Added Users Icon
 import toast from 'react-hot-toast';
 import { getImageUrl } from '../utils'; 
 
@@ -16,7 +16,10 @@ const Home = () => {
     const [selectedCategory, setSelectedCategory] = useState("All");
     const [selectedSize, setSelectedSize] = useState("All");
     const [selectedCondition, setSelectedCondition] = useState("All");
-    const [showFollowingOnly, setShowFollowingOnly] = useState(false); // 🆕 Follow Filter
+    
+    // 🆕 FOLLOWING FILTER STATE
+    const [showFollowingOnly, setShowFollowingOnly] = useState(false); 
+    
     const [sortOption, setSortOption] = useState("Newest");
 
     const categories = ["All", "Men", "Women", "Kids", "Toys", "Beauty", "Home", "Art", "Sports", "Electronics", "Accessories"];
@@ -28,18 +31,25 @@ const Home = () => {
                 if(Array.isArray(res.data)) setWishlistIds(res.data.map(item => item.id)); 
             });
         }
-    }, [user, showFollowingOnly]); // Refetch when filter changes
+    }, [user, showFollowingOnly]); // 👈 Refetch when toggle changes
 
     const fetchProducts = () => {
-        // 🆕 Toggle Endpoint
-        const endpoint = showFollowingOnly ? 'http://localhost:5000/following-products' : 'http://localhost:5000/products';
+        // 🆕 SWITCH ENDPOINTS BASED ON TOGGLE
+        const endpoint = showFollowingOnly 
+            ? 'http://localhost:5000/following-products' 
+            : 'http://localhost:5000/products';
+            
         const config = showFollowingOnly ? { withCredentials: true } : {};
 
         axios.get(endpoint, config)
             .then(res => setProducts(res.data))
             .catch(err => {
                 console.log(err);
-                if(showFollowingOnly) toast.error("Login to see following");
+                // If user tries to filter but isn't logged in/has error
+                if(showFollowingOnly) {
+                    toast.error("Login to see people you follow");
+                    setShowFollowingOnly(false); // Reset
+                }
             });
     };
 
@@ -94,13 +104,14 @@ const Home = () => {
                             <select onChange={(e) => setSelectedSize(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-200 bg-white text-stone-700 text-sm font-bold outline-none cursor-pointer hover:border-stone-400"><option value="All">Size: All</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option></select>
                             <select onChange={(e) => setSelectedCondition(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-200 bg-white text-stone-700 text-sm font-bold outline-none cursor-pointer hover:border-stone-400"><option value="All">Condition: All</option><option value="Brand New">Brand New</option><option value="Like New">Like New</option><option value="Good">Good</option></select>
                             
-                            {/* 🆕 FOLLOWING FILTER */}
+                            {/* 🆕 FOLLOWING FILTER TOGGLE */}
                             <button 
                                 onClick={() => setShowFollowingOnly(!showFollowingOnly)} 
                                 className={`px-4 py-2 rounded-lg border text-sm font-bold flex items-center gap-2 transition ${showFollowingOnly ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'}`}
                             >
                                 <Users size={16}/> Following
                             </button>
+
                         </div>
                         <div className="flex items-center gap-2 w-full md:w-auto">
                             <ArrowUpDown size={16} className="text-stone-400" />
@@ -114,7 +125,9 @@ const Home = () => {
                         <Link to={`/product/${item.id}`} key={item.id} className="group relative flex flex-col bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 h-full">
                             <div className="aspect-square w-full bg-stone-100 relative overflow-hidden">
                                 <img src={getImageUrl(item.image_url)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-700" />
-                                <button onClick={(e) => toggleWishlist(e, item.id)} className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-sm hover:scale-110 transition z-10 text-stone-400 hover:text-red-500"><Heart size={18} className={wishlistIds.includes(item.id) ? "fill-red-500 text-red-500" : ""} /></button>
+                                <button onClick={(e) => toggleWishlist(e, item.id)} className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-sm hover:scale-110 transition z-10 text-stone-400 hover:text-red-500">
+                                    <Heart size={18} className={wishlistIds.includes(item.id) ? "fill-red-500 text-red-500" : ""} />
+                                </button>
                                 {item.size && <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded">{item.size}</div>}
                             </div>
                             <div className="p-4 flex flex-col flex-grow">

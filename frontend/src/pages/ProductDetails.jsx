@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, ShoppingBag, ShieldCheck, MessageCircle, X, Star, Tag, Gavel, UserPlus, Check } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, ShieldCheck, MessageCircle, X, Star, Tag, Gavel, UserPlus, Check, Flag } from 'lucide-react'; // 👈 Added Flag
 import { AuthContext } from '../context/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
@@ -64,6 +64,18 @@ const ProductDetails = () => {
         }
     };
 
+    // 🛡️ REPORT FUNCTION
+    const handleReport = () => {
+        if(!user) return navigate('/login');
+        const reason = prompt("Please explain why you are reporting this item:");
+        if(reason) {
+            axios.post('http://localhost:5000/report', { product_id: product.id, reason }, { withCredentials: true })
+                .then(res => {
+                    if(res.data.Status === "Success") toast.success("Report Submitted. Admin will review.");
+                });
+        }
+    };
+
     const handleMakeOffer = () => {
         if (!user) return navigate('/login');
         if (!offerAmount) return toast.error("Enter an amount");
@@ -117,7 +129,6 @@ const ProductDetails = () => {
                                 <div className="text-xs text-stone-400">Seller</div>
                                 <div className="font-bold text-stone-900 flex items-center gap-2">
                                     {product.seller_name} 
-                                    {/* 🆕 FOLLOW BUTTON */}
                                     {user && user.id !== product.seller_id && (
                                         <button onClick={handleFollow} className={`text-[10px] px-2 py-0.5 rounded border transition flex items-center gap-1 ${isFollowing ? 'bg-stone-900 text-white' : 'bg-white text-stone-900 border-stone-300 hover:bg-stone-50'}`}>
                                             {isFollowing ? <Check size={10}/> : <UserPlus size={10}/>} {isFollowing ? "Following" : "Follow"}
@@ -134,6 +145,14 @@ const ProductDetails = () => {
                             <div className="flex items-center gap-2 bg-stone-50 px-4 py-3 rounded-xl border border-stone-100"><ShieldCheck size={18} className="text-stone-400"/><div><p className="text-[10px] text-stone-400 font-bold uppercase">Condition</p><p className="text-sm font-bold text-stone-900">{product.item_condition || "Good"}</p></div></div>
                         </div>
                         <div className="text-4xl font-bold text-stone-900 mb-8">Rs. {product.price}</div>
+                        
+                        {/* 🛡️ REPORT BUTTON */}
+                        <div className="mb-8">
+                            <button onClick={handleReport} className="text-stone-400 text-xs flex items-center gap-1 hover:text-red-500 transition">
+                                <Flag size={14}/> Report this Item
+                            </button>
+                        </div>
+
                         {product.is_sold === 1 ? (<button disabled className="w-full bg-stone-200 text-stone-400 py-4 rounded-xl font-bold cursor-not-allowed text-lg">Item Sold</button>) : (<div className="grid grid-cols-2 gap-3"><button onClick={() => user ? setShowPaymentModal(true) : navigate('/login')} className="col-span-2 bg-[#60BB46] text-white py-4 rounded-xl font-bold text-lg hover:bg-[#52a13b] transition shadow-lg shadow-green-100">Pay with eSewa</button><button onClick={() => user ? setShowOfferModal(true) : navigate('/login')} className="bg-stone-900 text-white py-3 rounded-xl font-bold hover:bg-stone-800 transition flex justify-center items-center gap-2"><Gavel size={18}/> Make Offer</button><button onClick={handleChat} className="bg-white border-2 border-stone-200 text-stone-700 py-3 rounded-xl font-bold text-lg hover:bg-green-50 hover:border-green-500 hover:text-green-600 transition flex justify-center items-center gap-2"><MessageCircle size={18} /> Chat</button></div>)}
                     </div>
                 </div>
