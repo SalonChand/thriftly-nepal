@@ -5,11 +5,11 @@ import { Camera, Heart, Plus, Video, Image as ImageIcon, Volume2, VolumeX, Messa
 import toast from 'react-hot-toast';
 import { getImageUrl } from '../utils';
 import { Link } from 'react-router-dom';
+import io from 'socket.io-client';
 
 const Stories = () => {
     const { user } = useContext(AuthContext);
     
-    // Initialize as empty array to be safe
     const [stories, setStories] = useState([]);
     const [activeTab, setActiveTab] = useState('posts');
     const [showModal, setShowModal] = useState(false);
@@ -19,16 +19,43 @@ const Stories = () => {
     const [fileType, setFileType] = useState("image");
 
     const [isMuted, setIsMuted] = useState(true);
+    
+    // COMMENT & SOCIAL STATES
     const [showComments, setShowComments] = useState(null);
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState("");
     const [replyTo, setReplyTo] = useState(null); 
     const [expandedComments, setExpandedComments] = useState({});
 
-    useEffect(() => { fetchStories(); }, []);
+    // ⚡ REAL-TIME SOCKET CONNECTION
+    useEffect(() => {
+        fetchStories();
+        const socket = io("http://localhost:5000");
+
+        // 1. Listen: Story Likes
+        socket.on('story_like_update', ({ storyId, likes }) => {
+            setStories(prev => prev.map(s => s.id === storyId ? { ...s, likes } : s));
+        });
+
+        // 2. Listen: New Comments
+        socket.on('new_comment', ({ storyId, comment }) => {
+            if (showComments === storyId) {
+                setComments(prev => [...prev, comment]);
+            }
+            setStories(prev => prev.map(s => s.id === storyId ? { ...s, comment_count: (s.comment_count || 0) + 1 } : s));
+        });
+
+        // 3. Listen: Comment Likes
+        socket.on('comment_like_update', ({ commentId, likes }) => {
+            setComments(prev => prev.map(c => c.id === commentId ? { ...c, likes } : c));
+        });
+
+        return () => socket.disconnect();
+    }, [showComments]);
 
     const fetchStories = () => {
-        axios.get('http://localhost:5000/stories')
+        // We use withCredentials to check if "I" liked the story
+        axios.get('http://localhost:5000/stories', { withCredentials: true })
             .then(res => {
                 if (Array.isArray(res.data)) setStories(res.data);
                 else setStories([]);
@@ -58,7 +85,21 @@ const Stories = () => {
         });
     };
 
-    const handleLike = (id) => { axios.put(`http://localhost:5000/stories/like/${id}`).then(() => fetchStories()); };
+    // ❤️ LIKE STORY (One per person)
+    const handleLike = (id) => { 
+        // Optimistic UI Update
+        setStories(prev => prev.map(s => {
+            if(s.id === id) {
+                return { 
+                    ...s, 
+                    likes: s.is_liked_by_me ? s.likes - 1 : s.likes + 1,
+                    is_liked_by_me: !s.is_liked_by_me 
+                };
+            }
+            return s;
+        }));
+        axios.put(`http://localhost:5000/stories/like/${id}`, {}, { withCredentials: true });
+    };
 
     const openComments = (storyId) => {
         setShowComments(storyId);
@@ -67,39 +108,38 @@ const Stories = () => {
         axios.get(`http://localhost:5000/stories/${storyId}/comments`, { params: { userId: user?.id } }).then(res => setComments(res.data || []));
     };
     
+    // 💬 POST REPLY
     const postComment = () => {
         if(!newComment) return;
         const payload = { comment: newComment, parent_id: replyTo ? replyTo.id : null };
+        
         axios.post(`http://localhost:5000/stories/${showComments}/comment`, payload, { withCredentials: true })
             .then(() => { 
                 setNewComment(""); 
                 if(replyTo) setExpandedComments(prev => ({ ...prev, [replyTo.id]: true }));
                 setReplyTo(null);
-                axios.get(`http://localhost:5000/stories/${showComments}/comments`, { params: { userId: user?.id } }).then(res => setComments(res.data || []));
+                // No need to fetch, socket will update it!
             });
     };
 
+    // 👍 LIKE COMMENT
     const likeComment = (commentId) => {
-        axios.post(`http://localhost:5000/comments/like/${commentId}`, {}, { withCredentials: true })
-            .then(res => {
-                const action = res.data.Status; 
-                setComments(comments.map(c => {
-                    if(c.id === commentId) {
-                        return { 
-                            ...c, 
-                            likes: action === "Liked" ? (c.likes || 0) + 1 : (c.likes || 0) - 1,
-                            is_liked_by_me: action === "Liked" ? 1 : 0 
-                        };
-                    }
-                    return c;
-                }));
-            });
+        // Optimistic UI
+        setComments(prev => prev.map(c => c.id === commentId ? { ...c, likes: c.is_liked_by_me ? c.likes - 1 : c.likes + 1, is_liked_by_me: !c.is_liked_by_me } : c));
+        axios.post(`http://localhost:5000/comments/like/${commentId}`, {}, { withCredentials: true });
     };
 
-    const toggleReplies = (commentId) => {
-        setExpandedComments(prev => ({ ...prev, [commentId]: !prev[commentId] }));
+    const toggleReplies = (commentId) => { setExpandedComments(prev => ({ ...prev, [commentId]: !prev[commentId] })); };
+
+    const handleReport = (storyId) => {
+        const reason = prompt("Why are you reporting this story?");
+        if(reason) {
+            axios.post(`http://localhost:5000/stories/${storyId}/report`, { reason }, { withCredentials: true })
+                .then(res => { if(res.data.Status === "Success") toast.success("Reported to Admin."); });
+        }
     };
 
+    // 🌲 RECURSIVE COMMENT TREE (The Thread System)
     const renderCommentTree = (parentId = null, depth = 0) => {
         const childComments = comments.filter(c => c.parent_id === parentId);
         if (childComments.length === 0) return null;
@@ -129,7 +169,6 @@ const Stories = () => {
         });
     };
 
-    // 🛡️ ROBUST FILTER (Case Insensitive)
     const filteredStories = stories.filter(s => {
         const dbType = (s.media_type || 'image').toLowerCase();
         const targetType = activeTab === 'posts' ? 'image' : 'video';
@@ -139,6 +178,7 @@ const Stories = () => {
     return (
         <div className="min-h-screen bg-[#FDFBF7] p-6 font-sans pt-24">
             
+            {/* COMMENT MODAL */}
             {showComments && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-end md:items-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl relative animate-fade-in">
@@ -171,13 +211,10 @@ const Stories = () => {
                     {filteredStories.map(story => (
                         <div key={story.id} className={`bg-white rounded-3xl shadow-sm border border-stone-100 overflow-hidden mx-auto w-full ${activeTab === 'shorts' ? 'w-[320px] aspect-[9/16] relative group shadow-lg' : 'w-full'}`}>
                             
-                            {/* HEADER (Posts Only) */}
+                            {/* HEADER */}
                             {activeTab === 'posts' && (
                                 <div className="p-4 flex items-center justify-between border-b border-stone-50">
-                                    <Link to={`/seller/${story.user_id}`} className="flex items-center gap-3 hover:opacity-75 transition">
-                                        <div className="w-10 h-10 rounded-full overflow-hidden bg-stone-200"><img src={getImageUrl(story.profile_pic)} className="w-full h-full object-cover"/></div>
-                                        <span className="font-bold text-stone-900">{story.username}</span>
-                                    </Link>
+                                    <Link to={`/seller/${story.user_id}`} className="flex items-center gap-3 hover:opacity-75 transition"><div className="w-10 h-10 rounded-full overflow-hidden bg-stone-200"><img src={getImageUrl(story.profile_pic)} className="w-full h-full object-cover"/></div><span className="font-bold text-stone-900">{story.username}</span></Link>
                                     <button onClick={() => handleReport(story.id)} className="text-stone-400 hover:text-red-500 flex items-center gap-1 text-xs"><Flag size={14}/> Report</button>
                                 </div>
                             )}
@@ -189,6 +226,7 @@ const Stories = () => {
                                     {activeTab === 'shorts' && (
                                         <>
                                             <div className="absolute top-3 right-3 flex flex-col gap-3 z-20">
+                                                <button onClick={(e) => { e.stopPropagation(); handleReport(story.id); }} className="bg-black/40 text-white p-2.5 rounded-full hover:bg-red-600 transition backdrop-blur-sm"><Flag size={18}/></button>
                                                 <button onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }} className="bg-black/40 text-white p-2.5 rounded-full backdrop-blur-sm">{isMuted ? <VolumeX size={16}/> : <Volume2 size={16}/>}</button>
                                             </div>
                                             <div className="absolute bottom-0 left-0 w-full p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent text-white">
@@ -202,8 +240,11 @@ const Stories = () => {
                             {/* FOOTER */}
                             <div className={activeTab === 'shorts' ? "absolute bottom-20 right-2 flex flex-col gap-4 text-white z-20" : "p-5"}>
                                 <div className={`flex ${activeTab === 'shorts' ? 'flex-col items-center' : 'items-center gap-4 mb-3'}`}>
-                                    <button onClick={() => handleLike(story.id)} className="flex items-center gap-1 hover:text-red-500 transition group"><Heart size={24} className={activeTab === 'shorts' ? 'drop-shadow-lg' : ''} /> <span className="text-sm font-bold">{story.likes}</span></button>
-                                    <button onClick={(e) => {e.stopPropagation(); openComments(story.id)}} className={`flex items-center gap-1 hover:text-blue-500 ${activeTab === 'shorts' ? 'mt-4' : ''}`}><MessageCircle size={24} className={activeTab === 'shorts' ? 'drop-shadow-lg' : ''} /> <span className="text-sm font-bold">{story.comment_count || 0}</span></button>
+                                    <button onClick={() => handleLike(story.id)} className={`flex items-center gap-1 transition group hover:scale-110 ${story.is_liked_by_me ? 'text-red-500' : (activeTab === 'shorts' ? 'text-white' : 'text-stone-600')}`}>
+                                        <Heart size={24} className={`${activeTab === 'shorts' ? 'drop-shadow-lg' : ''} ${story.is_liked_by_me ? 'fill-red-500' : ''}`} /> 
+                                        <span className="text-sm font-bold">{story.likes}</span>
+                                    </button>
+                                    <button onClick={(e) => {e.stopPropagation(); openComments(story.id)}} className={`flex items-center gap-1 ${activeTab === 'shorts' ? 'text-white hover:text-blue-300' : 'hover:text-blue-500'} ${activeTab === 'shorts' ? 'mt-4' : ''}`}><MessageCircle size={24} className={activeTab === 'shorts' ? 'drop-shadow-lg' : ''} /> <span className="text-sm font-bold">{story.comment_count || 0}</span></button>
                                 </div>
                                 {activeTab === 'posts' && <p className="text-stone-800 leading-relaxed"><span className="font-bold mr-2">{story.username}</span>{story.caption}</p>}
                             </div>
